@@ -185,34 +185,20 @@
             color: #ffc107;
         }
 
-        .offer-answer {
+        .room-display {
             background: rgba(255, 255, 255, 0.1);
             border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
+            padding: 15px;
+            margin: 15px 0;
+            text-align: center;
         }
 
-        .offer-answer h3 {
-            margin-bottom: 15px;
+        .room-id {
+            font-size: 1.2rem;
+            font-weight: bold;
             color: #ffc107;
-        }
-
-        .offer-answer textarea {
-            width: 100%;
-            height: 100px;
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            border-radius: 8px;
-            color: white;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 0.9rem;
-            resize: vertical;
-            margin-bottom: 10px;
-        }
-
-        .offer-answer textarea::placeholder {
-            color: rgba(255, 255, 255, 0.7);
+            margin: 10px 0;
+            word-break: break-all;
         }
 
         @media (max-width: 768px) {
@@ -243,13 +229,20 @@
     <div class="container">
         <div class="connection-section">
             <div class="input-group">
-                <button id="startBtn">Start Call</button>
-                <button id="hangupBtn" disabled>📞 Hang Up</button>
+                <input type="text" id="roomInput" placeholder="Enter Room ID to join a friend">
+                <button id="joinBtn">Join Room</button>
+                <button id="createBtn">Create New Room</button>
             </div>
         </div>
 
+        <div id="roomDisplay" class="room-display" style="display: none;">
+            <p>Share this Room ID with your friend:</p>
+            <div id="roomId" class="room-id"></div>
+            <button id="copyRoomBtn">Copy Room ID</button>
+        </div>
+
         <div id="status" class="status disconnected">
-            Click "Start Call" to begin
+            Create a room or join your friend's room to start
         </div>
 
         <div class="video-container">
@@ -266,94 +259,56 @@
         <div class="controls">
             <button id="muteBtn" disabled>🎤 Mute</button>
             <button id="videoBtn" disabled>📹 Camera Off</button>
-        </div>
-
-        <div id="offerSection" class="offer-answer" style="display: none;">
-            <h3>📤 Send this to your friend:</h3>
-            <textarea id="localOffer" readonly placeholder="Your connection offer will appear here..."></textarea>
-            <button id="copyOfferBtn">Copy Offer</button>
-        </div>
-
-        <div id="answerSection" class="offer-answer" style="display: none;">
-            <h3>📥 Paste your friend's answer here:</h3>
-            <textarea id="remoteAnswer" placeholder="Paste the answer from your friend here..."></textarea>
-            <button id="submitAnswerBtn">Connect</button>
-        </div>
-
-        <div id="offerInputSection" class="offer-answer" style="display: none;">
-            <h3>📥 Paste your friend's offer here:</h3>
-            <textarea id="remoteOffer" placeholder="Paste the offer from your friend here..."></textarea>
-            <button id="submitOfferBtn">Create Answer</button>
-        </div>
-
-        <div id="answerOutputSection" class="offer-answer" style="display: none;">
-            <h3>📤 Send this answer to your friend:</h3>
-            <textarea id="localAnswer" readonly placeholder="Your answer will appear here..."></textarea>
-            <button id="copyAnswerBtn">Copy Answer</button>
+            <button id="hangupBtn" disabled>📞 Hang Up</button>
         </div>
 
         <div class="instructions">
-            <h3>How to connect with your friend:</h3>
-            <p><strong>Person 1 (Caller):</strong></p>
-            <p>1. Click "Start Call" and allow camera/microphone access</p>
-            <p>2. Copy the generated offer and send it to your friend</p>
-            <p>3. Wait for your friend to send back an answer</p>
-            <p>4. Paste the answer and click "Connect"</p>
-            <br>
-            <p><strong>Person 2 (Receiver):</strong></p>
-            <p>1. Click "Start Call" and allow camera/microphone access</p>
-            <p>2. Paste your friend's offer and click "Create Answer"</p>
-            <p>3. Copy the generated answer and send it back to your friend</p>
-            <p>4. Wait for connection to establish</p>
+            <h3>How to connect:</h3>
+            <p><strong>Option 1:</strong> Click "Create New Room" and share the Room ID with your friend</p>
+            <p><strong>Option 2:</strong> Enter your friend's Room ID and click "Join Room"</p>
+            <p><strong>Note:</strong> This uses PeerJS for easy peer-to-peer connections. Both devices need camera/microphone access.</p>
         </div>
     </div>
 
+    <!-- PeerJS CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
+    
     <script>
         class VideoCallApp {
             constructor() {
                 this.localVideo = document.getElementById('localVideo');
                 this.remoteVideo = document.getElementById('remoteVideo');
-                this.startBtn = document.getElementById('startBtn');
-                this.hangupBtn = document.getElementById('hangupBtn');
+                this.roomInput = document.getElementById('roomInput');
+                this.joinBtn = document.getElementById('joinBtn');
+                this.createBtn = document.getElementById('createBtn');
                 this.muteBtn = document.getElementById('muteBtn');
                 this.videoBtn = document.getElementById('videoBtn');
+                this.hangupBtn = document.getElementById('hangupBtn');
                 this.status = document.getElementById('status');
+                this.roomDisplay = document.getElementById('roomDisplay');
+                this.roomId = document.getElementById('roomId');
+                this.copyRoomBtn = document.getElementById('copyRoomBtn');
 
-                // Offer/Answer elements
-                this.offerSection = document.getElementById('offerSection');
-                this.answerSection = document.getElementById('answerSection');
-                this.offerInputSection = document.getElementById('offerInputSection');
-                this.answerOutputSection = document.getElementById('answerOutputSection');
-                
-                this.localOffer = document.getElementById('localOffer');
-                this.remoteAnswer = document.getElementById('remoteAnswer');
-                this.remoteOffer = document.getElementById('remoteOffer');
-                this.localAnswer = document.getElementById('localAnswer');
-                
-                this.copyOfferBtn = document.getElementById('copyOfferBtn');
-                this.submitAnswerBtn = document.getElementById('submitAnswerBtn');
-                this.submitOfferBtn = document.getElementById('submitOfferBtn');
-                this.copyAnswerBtn = document.getElementById('copyAnswerBtn');
-
+                this.peer = null;
                 this.localStream = null;
-                this.peerConnection = null;
+                this.currentCall = null;
                 this.isMuted = false;
                 this.isVideoOff = false;
-                this.isInitiator = false;
 
                 this.setupEventListeners();
             }
 
             setupEventListeners() {
-                this.startBtn.onclick = () => this.startCall();
-                this.hangupBtn.onclick = () => this.hangup();
+                this.createBtn.onclick = () => this.createRoom();
+                this.joinBtn.onclick = () => this.joinRoom();
                 this.muteBtn.onclick = () => this.toggleMute();
                 this.videoBtn.onclick = () => this.toggleVideo();
+                this.hangupBtn.onclick = () => this.hangup();
+                this.copyRoomBtn.onclick = () => this.copyRoomId();
 
-                this.copyOfferBtn.onclick = () => this.copyToClipboard(this.localOffer.value);
-                this.submitAnswerBtn.onclick = () => this.handleRemoteAnswer();
-                this.submitOfferBtn.onclick = () => this.handleRemoteOffer();
-                this.copyAnswerBtn.onclick = () => this.copyToClipboard(this.localAnswer.value);
+                this.roomInput.onkeypress = (e) => {
+                    if (e.key === 'Enter') this.joinRoom();
+                };
             }
 
             updateStatus(message, type) {
@@ -361,174 +316,177 @@
                 this.status.className = `status ${type}`;
             }
 
-            async copyToClipboard(text) {
+            generateRoomId() {
+                return 'room-' + Math.random().toString(36).substr(2, 9);
+            }
+
+            async copyRoomId() {
                 try {
-                    await navigator.clipboard.writeText(text);
-                    this.updateStatus('Copied to clipboard!', 'connected');
+                    await navigator.clipboard.writeText(this.roomId.textContent);
+                    this.updateStatus('Room ID copied to clipboard!', 'connected');
                     setTimeout(() => {
-                        this.updateStatus('Waiting for friend...', 'connecting');
+                        this.updateStatus('Waiting for friend to join...', 'connecting');
                     }, 2000);
                 } catch (err) {
-                    console.error('Failed to copy: ', err);
-                    this.updateStatus('Please copy manually', 'connecting');
+                    console.error('Failed to copy:', err);
                 }
             }
 
-            async startCall() {
-                try {
-                    await this.initializeMedia();
-                    await this.createPeerConnection();
-                    this.isInitiator = true;
-                    await this.createOffer();
-                    this.enableControls();
-                    this.showOfferSection();
-                    this.showAnswerSection();
-                } catch (error) {
-                    console.error('Error starting call:', error);
-                    this.updateStatus('Error starting call', 'disconnected');
-                }
+            async initializePeer(roomId = null) {
+                return new Promise((resolve, reject) => {
+                    try {
+                        // Initialize PeerJS with a specific ID or let it generate one
+                        this.peer = new Peer(roomId, {
+                            host: 'peerjs-server.herokuapp.com',
+                            port: 443,
+                            path: '/',
+                            secure: true,
+                            config: {
+                                iceServers: [
+                                    { urls: 'stun:stun.l.google.com:19302' },
+                                    { urls: 'stun:stun1.l.google.com:19302' }
+                                ]
+                            }
+                        });
+
+                        this.peer.on('open', (id) => {
+                            console.log('Peer connection opened with ID:', id);
+                            resolve(id);
+                        });
+
+                        this.peer.on('error', (error) => {
+                            console.error('Peer error:', error);
+                            if (error.type === 'peer-unavailable') {
+                                this.updateStatus('Friend not found. Check the Room ID.', 'disconnected');
+                            } else if (error.type === 'unavailable-id') {
+                                this.updateStatus('Room ID already taken. Try a different one.', 'disconnected');
+                            } else {
+                                this.updateStatus('Connection error. Please try again.', 'disconnected');
+                            }
+                            reject(error);
+                        });
+
+                        // Handle incoming calls
+                        this.peer.on('call', (call) => {
+                            console.log('Incoming call from:', call.peer);
+                            this.updateStatus('Incoming call! Accepting...', 'connecting');
+                            
+                            // Answer the call with our video stream
+                            call.answer(this.localStream);
+                            this.handleCall(call);
+                        });
+
+                    } catch (error) {
+                        console.error('Error initializing peer:', error);
+                        reject(error);
+                    }
+                });
             }
 
-            async initializeMedia() {
+            async startLocalVideo() {
                 try {
                     this.localStream = await navigator.mediaDevices.getUserMedia({
                         video: true,
                         audio: true
                     });
                     this.localVideo.srcObject = this.localStream;
-                    this.updateStatus('Camera and microphone ready', 'connected');
+                    this.updateStatus('Camera ready!', 'connected');
+                    return true;
                 } catch (error) {
-                    console.error('Error accessing media devices:', error);
-                    throw new Error('Could not access camera/microphone');
+                    console.error('Error accessing media:', error);
+                    this.updateStatus('Camera access denied. Please allow camera/microphone.', 'disconnected');
+                    alert('Please allow camera and microphone access to make video calls');
+                    return false;
                 }
             }
 
-            async createPeerConnection() {
-                const configuration = {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' }
-                    ]
-                };
+            async createRoom() {
+                try {
+                    this.updateStatus('Setting up camera...', 'connecting');
+                    
+                    const mediaReady = await this.startLocalVideo();
+                    if (!mediaReady) return;
 
-                this.peerConnection = new RTCPeerConnection(configuration);
+                    const roomId = this.generateRoomId();
+                    await this.initializePeer(roomId);
+                    
+                    this.roomId.textContent = roomId;
+                    this.roomDisplay.style.display = 'block';
+                    this.updateStatus('Room created! Share the Room ID with your friend.', 'connecting');
+                    this.enableControls();
 
-                // Add local stream
-                this.localStream.getTracks().forEach(track => {
-                    this.peerConnection.addTrack(track, this.localStream);
+                } catch (error) {
+                    console.error('Error creating room:', error);
+                    this.updateStatus('Failed to create room. Please try again.', 'disconnected');
+                }
+            }
+
+            async joinRoom() {
+                const targetRoomId = this.roomInput.value.trim();
+                if (!targetRoomId) {
+                    alert('Please enter a Room ID');
+                    return;
+                }
+
+                try {
+                    this.updateStatus('Setting up camera...', 'connecting');
+                    
+                    const mediaReady = await this.startLocalVideo();
+                    if (!mediaReady) return;
+
+                    const myRoomId = this.generateRoomId();
+                    await this.initializePeer(myRoomId);
+                    
+                    this.updateStatus('Calling your friend...', 'connecting');
+                    
+                    // Call the target room
+                    const call = this.peer.call(targetRoomId, this.localStream);
+                    this.handleCall(call);
+                    this.enableControls();
+
+                } catch (error) {
+                    console.error('Error joining room:', error);
+                    this.updateStatus('Failed to join room. Please check the Room ID.', 'disconnected');
+                }
+            }
+
+            handleCall(call) {
+                this.currentCall = call;
+                
+                call.on('stream', (remoteStream) => {
+                    console.log('Received remote stream');
+                    this.remoteVideo.srcObject = remoteStream;
+                    this.updateStatus('Connected! Video call active!', 'connected');
                 });
 
-                // Handle remote stream
-                this.peerConnection.ontrack = (event) => {
-                    console.log('Received remote stream');
-                    this.remoteVideo.srcObject = event.streams[0];
-                    this.updateStatus('Connected! Video call active!', 'connected');
-                };
+                call.on('close', () => {
+                    console.log('Call ended');
+                    this.remoteVideo.srcObject = null;
+                    this.updateStatus('Call ended', 'disconnected');
+                });
 
-                // Handle connection state changes
-                this.peerConnection.onconnectionstatechange = () => {
-                    console.log('Connection state:', this.peerConnection.connectionState);
-                    if (this.peerConnection.connectionState === 'connected') {
-                        this.updateStatus('Video call connected!', 'connected');
-                    } else if (this.peerConnection.connectionState === 'disconnected') {
-                        this.updateStatus('Call disconnected', 'disconnected');
-                    }
-                };
-
-                this.peerConnection.onicecandidate = (event) => {
-                    if (event.candidate) {
-                        console.log('New ICE candidate:', event.candidate);
-                    }
-                };
-            }
-
-            async createOffer() {
-                try {
-                    const offer = await this.peerConnection.createOffer();
-                    await this.peerConnection.setLocalDescription(offer);
-                    this.localOffer.value = JSON.stringify(offer);
-                    this.updateStatus('Offer created - share with your friend!', 'connecting');
-                } catch (error) {
-                    console.error('Error creating offer:', error);
-                }
-            }
-
-            async handleRemoteAnswer() {
-                try {
-                    const answerText = this.remoteAnswer.value.trim();
-                    if (!answerText) {
-                        alert('Please paste your friend\'s answer');
-                        return;
-                    }
-
-                    const answer = JSON.parse(answerText);
-                    await this.peerConnection.setRemoteDescription(answer);
-                    this.updateStatus('Answer received - connecting...', 'connecting');
-                    this.answerSection.style.display = 'none';
-                } catch (error) {
-                    console.error('Error handling answer:', error);
-                    alert('Invalid answer format. Please check and try again.');
-                }
-            }
-
-            async handleRemoteOffer() {
-                try {
-                    const offerText = this.remoteOffer.value.trim();
-                    if (!offerText) {
-                        alert('Please paste your friend\'s offer');
-                        return;
-                    }
-
-                    // Initialize if not already done
-                    if (!this.localStream) {
-                        await this.initializeMedia();
-                        await this.createPeerConnection();
-                        this.enableControls();
-                    }
-
-                    const offer = JSON.parse(offerText);
-                    await this.peerConnection.setRemoteDescription(offer);
-                    
-                    const answer = await this.peerConnection.createAnswer();
-                    await this.peerConnection.setLocalDescription(answer);
-                    
-                    this.localAnswer.value = JSON.stringify(answer);
-                    this.updateStatus('Answer created - send to your friend!', 'connecting');
-                    
-                    this.offerInputSection.style.display = 'none';
-                    this.showAnswerOutputSection();
-                } catch (error) {
-                    console.error('Error handling offer:', error);
-                    alert('Invalid offer format. Please check and try again.');
-                }
-            }
-
-            showOfferSection() {
-                this.offerSection.style.display = 'block';
-                this.offerInputSection.style.display = 'block';
-            }
-
-            showAnswerSection() {
-                this.answerSection.style.display = 'block';
-            }
-
-            showAnswerOutputSection() {
-                this.answerOutputSection.style.display = 'block';
+                call.on('error', (error) => {
+                    console.error('Call error:', error);
+                    this.updateStatus('Call failed. Please try again.', 'disconnected');
+                });
             }
 
             enableControls() {
-                this.startBtn.disabled = true;
-                this.hangupBtn.disabled = false;
+                this.createBtn.disabled = true;
+                this.joinBtn.disabled = true;
+                this.roomInput.disabled = true;
                 this.muteBtn.disabled = false;
                 this.videoBtn.disabled = false;
+                this.hangupBtn.disabled = false;
             }
 
             disableControls() {
-                this.startBtn.disabled = false;
-                this.hangupBtn.disabled = true;
+                this.createBtn.disabled = false;
+                this.joinBtn.disabled = false;
+                this.roomInput.disabled = false;
                 this.muteBtn.disabled = true;
                 this.videoBtn.disabled = true;
+                this.hangupBtn.disabled = true;
             }
 
             toggleMute() {
@@ -554,10 +512,16 @@
             }
 
             hangup() {
+                // Close current call
+                if (this.currentCall) {
+                    this.currentCall.close();
+                    this.currentCall = null;
+                }
+
                 // Close peer connection
-                if (this.peerConnection) {
-                    this.peerConnection.close();
-                    this.peerConnection = null;
+                if (this.peer) {
+                    this.peer.destroy();
+                    this.peer = null;
                 }
 
                 // Stop local stream
@@ -572,22 +536,10 @@
 
                 // Reset UI
                 this.disableControls();
-                this.hideAllSections();
-                this.updateStatus('Call ended - Ready for next call', 'disconnected');
+                this.roomDisplay.style.display = 'none';
+                this.roomInput.value = '';
+                this.updateStatus('Ready for next call', 'disconnected');
                 this.resetControlTexts();
-            }
-
-            hideAllSections() {
-                this.offerSection.style.display = 'none';
-                this.answerSection.style.display = 'none';
-                this.offerInputSection.style.display = 'none';
-                this.answerOutputSection.style.display = 'none';
-                
-                // Clear text areas
-                this.localOffer.value = '';
-                this.remoteAnswer.value = '';
-                this.remoteOffer.value = '';
-                this.localAnswer.value = '';
             }
 
             resetControlTexts() {
@@ -601,6 +553,13 @@
         // Initialize the app
         window.addEventListener('load', () => {
             new VideoCallApp();
+        });
+
+        // Handle page unload
+        window.addEventListener('beforeunload', () => {
+            if (window.videoApp) {
+                window.videoApp.hangup();
+            }
         });
     </script>
 </body>
